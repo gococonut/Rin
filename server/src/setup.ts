@@ -15,6 +15,7 @@ export function setup() {
     let gh_client_id = env.RIN_GITHUB_CLIENT_ID || env.GITHUB_CLIENT_ID;
     let gh_client_secret = env.RIN_GITHUB_CLIENT_SECRET || env.GITHUB_CLIENT_SECRET;
     let jwt_secret = env.JWT_SECRET;
+    const admin_token = env.ADMIN_TOKEN;
 
     if (!gh_client_id || !gh_client_secret) {
         throw new Error('Please set RIN_GITHUB_CLIENT_ID and RIN_GITHUB_CLIENT_SECRET');
@@ -22,12 +23,17 @@ export function setup() {
     if (!jwt_secret) {
         throw new Error('Please set JWT_SECRET');
     }
+    if (!admin_token) {
+        throw new Error('Please set ADMIN_TOKEN');
+    }
+
     const oauth = oauth2({
         GitHub: [
             gh_client_id,
             gh_client_secret
         ],
     })
+
     return new Elysia({ aot: false, name: 'setup' })
         .state('anyUser', anyUser)
         .use(oauth)
@@ -47,6 +53,36 @@ export function setup() {
                 return {};
             }
             const token = authorization.split(' ')[1]
+
+            // 处理 userId:token 格式的管理员认证
+            if (token && token.includes(':')) {
+                const [userIdStr, adminTokenValue] = token.split(':');
+                if (adminTokenValue === admin_token) {
+                    const userId = parseInt(userIdStr);
+                    if (isNaN(userId)) {
+                        return {};
+                    }
+
+                    // 查找对应的用户
+                    const user = await db.query.users.findFirst({
+                        where: eq(users.id, userId)
+                    });
+
+                    if (!user) {
+                        return {};
+                    }
+
+                    return {
+                        uid: user.id,
+                        username: user.username,
+                        admin: true,
+                        isTokenAuth: true
+                    };
+                }
+                return {};
+            }
+
+            // 原有的JWT验证逻辑
             if (process.env.NODE_ENV?.toLowerCase() === 'test') {
                 console.warn('Now in test mode, skip jwt verification.')
                 try {

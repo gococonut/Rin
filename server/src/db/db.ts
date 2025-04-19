@@ -21,6 +21,7 @@ export interface Env {
 
     RSS_TITLE: string,
     RSS_DESCRIPTION: string,
+    ADMIN_TOKEN: string,
 }
 
 export function db(env: Env) {
